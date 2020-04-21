@@ -68,6 +68,7 @@ int makeTable(char *fileName, LSTable *table) {
             if ((err = addEntry(table, offset - length, length)) < 0) {
                 return err;
             }
+            //printf("length: %d, offset: %d\n", length, offset);
             length = 0;
         }
     }
@@ -95,7 +96,9 @@ int printLine(char *fileName, LSTable *table, int lineNumber) {
         return ERR_OPEN;
     }
     LSTEntry entry = table->entries[lineNumber - 1];
-    char *buffer = malloc(sizeof(char) * entry.length);
+    char *buffer = calloc(sizeof(char), entry.length);
+//    printf("Entry: length: %d, offset: %d\n", entry.length, entry.offset);
+//    printf("Current buffer: %s\n", buffer);
     if (buffer == NULL) {
         perror("Cannot create a buffer to read lines");
         return ERR_MEMORY;
@@ -110,6 +113,11 @@ int printLine(char *fileName, LSTable *table, int lineNumber) {
         free(buffer);
         return ERR_READ;
     }
+    //printf("read: %d\n", err);
+    //rest of the buffer gets filled with junk after reading when on Solaris
+    if (strlen(buffer) > entry.length) {
+        buffer[entry.length] = '\0';
+    }
     if (close(fd) == -1) {
         perror("Error while closing the file");
         free(buffer);
@@ -120,7 +128,10 @@ int printLine(char *fileName, LSTable *table, int lineNumber) {
         free(buffer);
         return ERR_PRINT;
     }
+    //printf("Buf size: %lu\n", strlen(buffer));
+
     free(buffer);
+
     return 0;
 }
 
@@ -132,7 +143,7 @@ int readLineNumbers(int *number) {
         return ERR_WRITE;
     }
 
-    char *result = malloc(sizeof(char) * NUMBER_BUF_SIZE);
+    char *result = calloc(sizeof(char), NUMBER_BUF_SIZE);
     if (result == NULL) {
         perror("Cannot create a buffer to read numbers");
         return ERR_MEMORY;

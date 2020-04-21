@@ -1,5 +1,5 @@
 #include <stdio.h> //printf(3), perror(3)
-#include <stdlib.h> //exit(3), malloc(3), free(3), realloc(3), atoi(3)
+#include <stdlib.h> //exit(3), malloc(3), free(3), realloc(3), atoi(3), calloc(3)
 #include <fcntl.h> //open(2)
 #include <unistd.h> //read(2), lseek(2), close(2)
 #include <string.h> //strlen(3)
@@ -96,7 +96,7 @@ int printLine(char *fileName, LSTable *table, int lineNumber) {
         return ERR_OPEN;
     }
     LSTEntry entry = table->entries[lineNumber - 1];
-    char *buffer = calloc(sizeof(char), entry.length);
+    char *buffer = calloc(sizeof(char), entry.length + 1);
 //    printf("Entry: length: %d, offset: %d\n", entry.length, entry.offset);
 //    printf("Current buffer: %s\n", buffer);
     if (buffer == NULL) {
@@ -114,10 +114,8 @@ int printLine(char *fileName, LSTable *table, int lineNumber) {
         return ERR_READ;
     }
     //printf("read: %d\n", err);
-    //rest of the buffer gets filled with junk after reading when on Solaris
-    if (strlen(buffer) > entry.length) {
-        buffer[entry.length] = '\0';
-    }
+    //rest of the buffer gets filled with junk afqter reading when on Solaris
+    buffer[entry.length] = '\0';
     if (close(fd) == -1) {
         perror("Error while closing the file");
         free(buffer);

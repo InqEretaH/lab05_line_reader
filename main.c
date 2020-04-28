@@ -14,11 +14,12 @@
 #define ERR_OPEN -2
 #define ERR_READ -3
 #define ERR_CLOSE -4
-#define ERR_INCORRECTNUM -5
+#define ERR_INCORRECTNUM 1
 #define ERR_SEEK -6
 #define ERR_WRITE -7
 #define ERR_NOTDIGIT -8
 #define ERR_PRINT -9
+#define ERR_ARGS -10
 
 typedef struct LineSeparatorTableEntry {
     int offset;
@@ -86,9 +87,10 @@ int makeTable(char *fileName, LSTable *table) {
 }
 
 int printLine(char *fileName, LSTable *table, int lineNumber) {
-    int fd, t, err;
+    int fd;
     if (lineNumber > table->size || lineNumber < 0) {
-        fprintf(stderr, "A line with the given number does not exist\n");
+        fprintf(stderr, "A line with the given number does not exist\n"
+                        "Total number of lines: %d\n", table->size);
         return ERR_INCORRECTNUM;
     }
     if ((fd = open(fileName, O_RDONLY)) == -1) {
@@ -97,24 +99,20 @@ int printLine(char *fileName, LSTable *table, int lineNumber) {
     }
     LSTEntry entry = table->entries[lineNumber - 1];
     char *buffer = calloc(sizeof(char), entry.length + 1);
-//    printf("Entry: length: %d, offset: %d\n", entry.length, entry.offset);
-//    printf("Current buffer: %s\n", buffer);
     if (buffer == NULL) {
         perror("Cannot create a buffer to read lines");
         return ERR_MEMORY;
     }
-    if ((err = lseek(fd, entry.offset, SEEK_SET)) == -1) {
+    if (lseek(fd, entry.offset, SEEK_SET) == -1) {
         perror("Error while moving the cursor to the correct line");
         free(buffer);
         return ERR_SEEK;
     }
-    if ((err = read(fd, buffer, entry.length)) == -1) {
+    if (read(fd, buffer, entry.length) == -1) {
         perror("Error while reading a file");
         free(buffer);
         return ERR_READ;
     }
-    //printf("read: %d\n", err);
-    //rest of the buffer gets filled with junk afqter reading when on Solaris
     buffer[entry.length] = '\0';
     if (close(fd) == -1) {
         perror("Error while closing the file");
@@ -126,17 +124,14 @@ int printLine(char *fileName, LSTable *table, int lineNumber) {
         free(buffer);
         return ERR_PRINT;
     }
-    //printf("Buf size: %lu\n", strlen(buffer));
-
     free(buffer);
-
     return 0;
 }
 
 int readLineNumbers(int *number) {
-    int err, i;
+    int err, i, cmd;
     char *msg = "Enter your number: ";
-    if ((err = write(STDOUT_FILENO, msg, strlen(msg))) == - 1) {
+    if (write (STDIN_FILENO, msg, strlen(msg)) == - 1) {
         perror("Error while writing a message to enter the line");
         return ERR_WRITE;
     }
@@ -146,6 +141,7 @@ int readLineNumbers(int *number) {
         perror("Cannot create a buffer to read numbers");
         return ERR_MEMORY;
     }
+
     if ((err = read(STDIN_FILENO, result, NUMBER_BUF_SIZE)) == -1) {
         perror("Cannot allocate memory for number buffer");
         free(result);
@@ -177,14 +173,14 @@ int main(int argc, char *argv[]) {
     if (argc != 2) {
         char *msg = "Usage: ./program filename\n";
         write(STDOUT_FILENO, msg, strlen(msg));
-        exit(1);
+        exit(ERR_ARGS);
     }
 
-    int err, num = 0;
+    int err, errP, num = 0;
     LSTEntry *entries = malloc(sizeof(LSTEntry) * BUF_SIZE);
     if (entries == NULL) {
         fprintf(stderr, "Cannot allocate memory for table entries\n");
-        exit(1);
+        exit(ERR_MEMORY);
     }
     LSTable table;
     table.entries = entries;
@@ -194,24 +190,22 @@ int main(int argc, char *argv[]) {
     if ((err = makeTable(argv[1], &table)) < 0) {
         free(table.entries);
         fprintf(stderr, "Error while creating a table, error code: %d\n", err);
-        exit(2);
+        exit(err);
     }
 
-    while (1) {
-        if ((err = readLineNumbers(&num)) < 0) {
-            fprintf(stderr, "Error while reading line numbers, error code: %d\n", err);
+    while ((err = readLineNumbers(&num)) >= 0 && num != EXIT_CMD) {
+        if ((errP = printLine(argv[1], &table, num)) < 0) {
+            fprintf(stderr, "Error while printing a line, error code: %d\n", errP);
             break;
         }
-        if (num == EXIT_CMD)
-            break;
-        if ((err = printLine(argv[1], &table, num)) < 0) {
-            fprintf(stderr, "Error while printing a line, error code: %d\n", err);
-            break;
-        }
+    }
+    if (err < 0) {
+        fprintf(stderr, "Error while reading line numbers, error code: %d\n", err);
+        exit(err);
     }
     free(table.entries);
     if (err < 0) {
-        exit(3);
+        exit(err);
     }
 
     return 0;
